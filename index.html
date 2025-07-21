@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍳 QuickMeal AI - Multi-Step Recipe Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader {
+            border-top-color: #4f46e5;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .tag-bubble {
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Loading Overlay -->
+    <div id="loader-overlay" class="loader-overlay hidden">
+        <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-32 w-32 mb-4"></div>
+        <p id="loader-text" class="text-lg font-semibold text-gray-700">Finding recipe ideas...</p>
+    </div>
+
+    <!-- Page 1: Main Input -->
+    <div id="page-1" class="page active">
+        <div class="container mx-auto px-4 py-8 md:py-12 max-w-2xl">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl md:text-5xl font-bold text-gray-900">🍳 QuickMeal AI</h1>
+                <p class="mt-2 text-lg md:text-xl text-gray-600">Let's find your perfect meal.</p>
+            </header>
+            <main class="bg-white rounded-2xl shadow-lg p-6 md:p-8 space-y-6">
+                <!-- Cuisine -->
+                <div>
+                    <label for="cuisine-select" class="block text-sm font-medium text-gray-700 mb-2">1. Choose a Cuisine</label>
+                    <select id="cuisine-select" class="w-full p-3 bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <option>Any</option>
+                        <option>Italian</option>
+                        <option>Mexican</option>
+                        <option>Chinese</option>
+                        <option>Indian</option>
+                        <option>Japanese</option>
+                        <option>Thai</option>
+                        <option>American</option>
+                        <option>Other</option>
+                    </select>
+                    <input type="text" id="other-cuisine-input" class="hidden w-full mt-2 p-3 border border-gray-300 rounded-lg" placeholder="Enter cuisine type">
+                </div>
+                <!-- Ingredients -->
+                <div>
+                    <label for="ingredient-input" class="block text-sm font-medium text-gray-700 mb-2">2. Add your ingredients</label>
+                    <div class="flex">
+                        <input type="text" id="ingredient-input" class="w-full p-3 border border-gray-300 rounded-l-lg" placeholder="e.g., chicken, rice...">
+                        <button id="add-ingredient-btn" class="bg-indigo-600 text-white p-3 rounded-r-lg hover:bg-indigo-700">-&gt;</button>
+                    </div>
+                    <div id="ingredient-tags" class="mt-3 flex flex-wrap gap-2"></div>
+                </div>
+                <!-- Other Filters -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="time" class="block text-sm font-medium text-gray-700 mb-2">Cooking Time</label>
+                        <select id="time" class="w-full p-3 bg-white border border-gray-300 rounded-lg">
+                            <option>Any</option>
+                            <option>Under 15 mins</option>
+                            <option>Under 30 mins</option>
+                            <option>Under 1 hour</option>
+                            <option>Under 2 hours</option>
+                            <option>Under 3 hours</option>
+                            <option>Under 6 hours</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="difficulty" class="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                        <select id="difficulty" class="w-full p-3 bg-white border border-gray-300 rounded-lg">
+                            <option>Any</option>
+                            <option>Easy</option>
+                            <option>Medium</option>
+                            <option>Hard</option>
+                        </select>
+                    </div>
+                </div>
+                 <div>
+                    <label for="preferences" class="block text-sm font-medium text-gray-700 mb-2">Dietary Preference</label>
+                    <select id="preferences" class="w-full p-3 bg-white border border-gray-300 rounded-lg">
+                        <option>None</option>
+                        <option>Vegan</option>
+                        <option>Vegetarian</option>
+                        <option>Gluten-Free</option>
+                    </select>
+                </div>
+                <!-- Action Button -->
+                <button id="find-recipes-btn" class="w-full flex justify-center items-center bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Find Recipe Ideas</button>
+            </main>
+        </div>
+    </div>
+
+    <!-- Page 2: Recipe Options -->
+    <div id="page-2" class="page">
+        <div class="container mx-auto px-4 py-8 md:py-12 max-w-2xl">
+            <header class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Recipe Suggestions</h1>
+                <p class="mt-2 text-lg text-gray-600">Choose a recipe and confirm your ingredients.</p>
+            </header>
+            <main id="recipe-options-container" class="space-y-6">
+                <!-- Recipe options will be injected here -->
+            </main>
+            <button id="back-to-main-btn" class="mt-6 w-full text-center text-indigo-600 font-semibold hover:underline">Go Back</button>
+        </div>
+    </div>
+
+    <!-- Page 3: Final Recipe -->
+    <div id="page-3" class="page">
+        <div class="container mx-auto px-4 py-8 md:py-12 max-w-3xl">
+             <main>
+                <div id="recipe-output-wrapper" class="bg-white rounded-2xl shadow-lg p-6 md:p-10">
+                    <div id="recipe-output" class="prose max-w-none prose-indigo"></div>
+                </div>
+                <div class="mt-6 flex flex-col sm:flex-row gap-4">
+                    <button id="print-btn" class="w-full flex justify-center items-center bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800">Print Recipe</button>
+                    <button id="start-over-btn" class="w-full flex justify-center items-center bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700">Start Over</button>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <div id="error-message" class="hidden fixed bottom-5 right-5 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg shadow-lg" role="alert">
+        <strong class="font-bold">Oops! </strong>
+        <span class="block sm:inline">Something went wrong. Please try again.</span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { jsPDF } = window.jspdf;
+
+            // State
+            let userIngredients = new Set();
+            let recipeOptionsCache = [];
+
+            // Elements
+            const pages = document.querySelectorAll('.page');
+            const loader = document.getElementById('loader-overlay');
+            const loaderText = document.getElementById('loader-text');
+            const errorMessage = document.getElementById('error-message');
+
+            // Page 1 Elements
+            const cuisineSelect = document.getElementById('cuisine-select');
+            const otherCuisineInput = document.getElementById('other-cuisine-input');
+            const ingredientInput = document.getElementById('ingredient-input');
+            const addIngredientBtn = document.getElementById('add-ingredient-btn');
+            const ingredientTagsContainer = document.getElementById('ingredient-tags');
+            const findRecipesBtn = document.getElementById('find-recipes-btn');
+
+            // Page 2 Elements
+            const recipeOptionsContainer = document.getElementById('recipe-options-container');
+            const backToMainBtn = document.getElementById('back-to-main-btn');
+
+            // Page 3 Elements
+            const recipeOutputWrapper = document.getElementById('recipe-output-wrapper');
+            const recipeOutput = document.getElementById('recipe-output');
+            const printBtn = document.getElementById('print-btn');
+            const startOverBtn = document.getElementById('start-over-btn');
+
+            // --- Navigation ---
+            const goToPage = (pageId) => {
+                pages.forEach(p => p.classList.remove('active'));
+                document.getElementById(pageId).classList.add('active');
+                window.scrollTo(0, 0);
+            };
+
+            // --- Utility Functions ---
+            const showLoader = (text) => {
+                loaderText.textContent = text;
+                loader.classList.remove('hidden');
+            };
+            const hideLoader = () => loader.classList.add('hidden');
+            const showError = () => {
+                errorMessage.classList.remove('hidden');
+                setTimeout(() => errorMessage.classList.add('hidden'), 5000);
+            };
+
+            // --- Page 1 Logic ---
+            cuisineSelect.addEventListener('change', () => {
+                otherCuisineInput.classList.toggle('hidden', cuisineSelect.value !== 'Other');
+            });
+
+            const addIngredientTag = (name) => {
+                const ingredientName = name.trim().toLowerCase();
+                if (ingredientName && !userIngredients.has(ingredientName)) {
+                    userIngredients.add(ingredientName);
+                    const tag = document.createElement('div');
+                    tag.className = 'tag-bubble flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium pl-3 pr-2 py-1 rounded-full gap-2';
+                    tag.innerHTML = `<span class="capitalize">${ingredientName}</span><button data-name="${ingredientName}" class="remove-tag-btn bg-indigo-200 hover:bg-indigo-300 rounded-full h-5 w-5 flex items-center justify-center">&times;</button>`;
+                    ingredientTagsContainer.appendChild(tag);
+                }
+                ingredientInput.value = '';
+            };
+
+            addIngredientBtn.addEventListener('click', () => addIngredientTag(ingredientInput.value));
+            ingredientInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addIngredientTag(ingredientInput.value);
+                }
+            });
+
+            ingredientTagsContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-tag-btn')) {
+                    const name = e.target.dataset.name;
+                    userIngredients.delete(name);
+                    e.target.closest('.tag-bubble').remove();
+                }
+            });
+
+            findRecipesBtn.addEventListener('click', async () => {
+                if (userIngredients.size === 0) {
+                    alert('Please add at least one ingredient.');
+                    return;
+                }
+                showLoader('Finding recipe ideas...');
+                try {
+                    const prompt = createInitialPrompt();
+                    const result = await callGeminiAPI(prompt, true);
+                    recipeOptionsCache = result;
+                    renderRecipeOptions(result);
+                    goToPage('page-2');
+                } catch (error) {
+                    console.error("Error finding recipes:", error);
+                    showError();
+                } finally {
+                    hideLoader();
+                }
+            });
+            
+            backToMainBtn.addEventListener('click', () => goToPage('page-1'));
+
+            // --- Page 2 Logic ---
+            const renderRecipeOptions = (options) => {
+                recipeOptionsContainer.innerHTML = '';
+                options.forEach((option, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-6 rounded-xl shadow-md';
+                    card.innerHTML = `
+                        <h2 class="text-2xl font-bold text-gray-800">${option.recipeName}</h2>
+                        <div class="mt-4">
+                            <p class="font-semibold text-gray-700">You may also need:</p>
+                            <div class="mt-2 space-y-2 ingredient-checklist">
+                                ${option.additionalIngredients.map(ing => `
+                                    <label class="flex items-center">
+                                        <input type="checkbox" checked class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-ingredient="${ing}">
+                                        <span class="ml-3 text-gray-700">${ing}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <button data-index="${index}" class="generate-full-recipe-btn mt-6 w-full bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-600">Generate Full Recipe</button>
+                    `;
+                    recipeOptionsContainer.appendChild(card);
+                });
+            };
+            
+            recipeOptionsContainer.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('generate-full-recipe-btn')) {
+                    showLoader('Creating your custom recipe...');
+                    try {
+                        const index = e.target.dataset.index;
+                        const selectedOption = recipeOptionsCache[index];
+                        const checklist = e.target.closest('.bg-white').querySelector('.ingredient-checklist');
+                        const confirmedIngredients = Array.from(checklist.querySelectorAll('input:checked')).map(input => input.dataset.ingredient);
+
+                        const prompt = createFinalRecipePrompt(selectedOption.recipeName, confirmedIngredients);
+                        const result = await callGeminiAPI(prompt, false);
+                        renderFinalRecipe(result);
+                        goToPage('page-3');
+                    } catch (error) {
+                        console.error("Error generating full recipe:", error);
+                        showError();
+                    } finally {
+                        hideLoader();
+                    }
+                }
+            });
+
+
+            // --- Page 3 Logic ---
+            const renderFinalRecipe = (recipeText) => {
+                let htmlContent = recipeText
+                    .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-bold mb-6 text-gray-900">$1</h1>')
+                    .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-semibold mt-8 mb-4 text-gray-800">$1</h2>')
+                    .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold mt-6 mb-2 text-gray-700">$1</h3>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/^- (.*$)/gim, '<li class="ml-5 list-disc">$1</li>')
+                    .replace(/^\d+\. (.*$)/gim, '<li class="ml-5 list-decimal">$1</li>')
+                    .replace(/\n/g, '<br>');
+                recipeOutput.innerHTML = htmlContent;
+            };
+
+            printBtn.addEventListener('click', () => {
+                const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+                html2canvas(recipeOutput, { scale: 2, useCORS: true }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgProps = doc.getImageProperties(imgData);
+                    const pdfWidth = doc.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    let position = 15, heightLeft = pdfHeight;
+                    doc.addImage(imgData, 'PNG', 15, position, pdfWidth - 30, pdfHeight);
+                    heightLeft -= doc.internal.pageSize.getHeight() - 30;
+                    while (heightLeft >= 0) {
+                        position = heightLeft - pdfHeight;
+                        doc.addPage();
+                        doc.addImage(imgData, 'PNG', 15, position, pdfWidth - 30, pdfHeight);
+                        heightLeft -= doc.internal.pageSize.getHeight();
+                    }
+                    const title = recipeOutput.querySelector('h1')?.innerText || 'Recipe';
+                    doc.save(`${title.replace(/\s+/g, '-')}.pdf`);
+                });
+            });
+            
+            startOverBtn.addEventListener('click', () => {
+                // Reset state
+                userIngredients.clear();
+                recipeOptionsCache = [];
+                ingredientTagsContainer.innerHTML = '';
+                recipeOptionsContainer.innerHTML = '';
+                recipeOutput.innerHTML = '';
+                document.getElementById('page-1').querySelector('form')?.reset(); // Reset form if wrapped in one
+                goToPage('page-1');
+            });
+
+
+            // --- API Communication ---
+            const createInitialPrompt = () => {
+                const filters = {
+                    cuisine: cuisineSelect.value === 'Other' ? otherCuisineInput.value : cuisineSelect.value,
+                    time: document.getElementById('time').value,
+                    difficulty: document.getElementById('difficulty').value,
+                    preference: document.getElementById('preferences').value,
+                };
+                let prompt = `Based on these ingredients: ${[...userIngredients].join(', ')}. `;
+                if (filters.cuisine !== 'Any') prompt += `Cuisine: ${filters.cuisine}. `;
+                if (filters.time !== 'Any') prompt += `Max cooking time: ${filters.time}. `;
+                if (filters.difficulty !== 'Any') prompt += `Difficulty: ${filters.difficulty}. `;
+                if (filters.preference !== 'None') prompt += `Dietary preference: ${filters.preference}. `;
+                prompt += `Suggest 3 distinct recipe ideas. For each idea, provide a creative "recipeName" and a list of "additionalIngredients" the user might need.`;
+                return prompt;
+            };
+
+            const createFinalRecipePrompt = (recipeName, confirmedIngredients) => {
+                const allIngredients = [...new Set([...userIngredients, ...confirmedIngredients])];
+                return `Generate a full, detailed recipe for "${recipeName}". The recipe must use these ingredients: ${allIngredients.join(', ')}. Provide a final ingredient list with quantities, and step-by-step instructions. Format the entire output in clean Markdown.`;
+            };
+
+            const callGeminiAPI = async (prompt, isJson = false) => {
+                const apiKey = "AIzaSyDeyTLaEMI7aPL7nAPj_Hfm1waUrB-X4Dk";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+                if (isJson) {
+                    payload.generationConfig = {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    recipeName: { type: "STRING" },
+                                    additionalIngredients: { type: "ARRAY", items: { type: "STRING" } }
+                                },
+                                required: ["recipeName", "additionalIngredients"]
+                            }
+                        }
+                    };
+                }
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error("No content received from API.");
+
+                return isJson ? JSON.parse(text) : text;
+            };
+        });
+    </script>
+</body>
+</html>
